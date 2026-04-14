@@ -1,8 +1,76 @@
-# Project exclude paths
-/cmake-build-debug/
-/.vs
-/out/build/x64-Debug
+# =============================================================================
+# Quill Project .gitignore
+# =============================================================================
+
+# Build directories
+build*/
+cmake-build-*/
+out/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+install_manifest.txt
+CMakeLists.txt.user
+CMakeUserPresets.json
+
+# Ninja build system
+build.ninja
+.ninja_log
+.ninja_deps
+
+# Bazel build system
+bazel-*/
+
+# Compiled objects and binaries
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+
+# IDE and editor files
+/.vs/
 /CMakeSettings.json
-/out/build/x64-Release
-/out/build/Mingw64-Debug
-/out/build/x64-Debug-2
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.cproject
+.settings/
+
+# Testing and coverage
+Testing/
+*.gcno
+*.gcda
+*.gcov
+*.lcov
+coverage/
+
+# Package management and dependencies
+_deps/
+vcpkg_installed/
+conan/
+conanbuildinfo.*
+conaninfo.txt
+
+# Compilation database
+compile_commands.json
+
+# Cache directories
+/.cache/
+
+# Documentation build output
+docs/_build/
+
+# Platform-specific files
+.DS_Store
+Thumbs.db
