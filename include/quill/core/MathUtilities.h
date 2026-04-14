@@ -7,6 +7,7 @@
 #pragma once
 
 #include "quill/core/Attributes.h"
+#include "quill/core/Common.h"
 
 #include <cstdint>
 #include <limits>
