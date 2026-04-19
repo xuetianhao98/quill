@@ -6,14 +6,25 @@
 - [StringRef.h](file://include/quill/StringRef.h)
 - [StopWatch.h](file://include/quill/StopWatch.h)
 - [UserClockSource.h](file://include/quill/UserClockSource.h)
+- [MathUtilities.h](file://include/quill/core/MathUtilities.h)
+- [Common.h](file://include/quill/core/Common.h)
+- [Attributes.h](file://include/quill/core/Attributes.h)
 - [UtilityTest.cpp](file://test/unit_tests/UtilityTest.cpp)
 - [StopWatchTest.cpp](file://test/unit_tests/StopWatchTest.cpp)
 - [StringRefTest.cpp](file://test/integration_tests/StringRefTest.cpp)
+- [MathUtilitiesTest.cpp](file://test/unit_tests/MathUtilitiesTest.cpp)
 - [stopwatch.cpp](file://examples/stopwatch.cpp)
 - [user_clock_source.cpp](file://examples/user_clock_source.cpp)
 - [Codec.h](file://include/quill/core/Codec.h)
 - [DeferredFormatCodec.h](file://include/quill/DeferredFormatCodec.h)
 </cite>
+
+## 更新摘要
+**变更内容**
+- 新增数学工具类MathUtilities模块，提供幂运算检测和对数计算功能
+- MathUtilities.h现在正确包含Common.h，增强了数学工具函数的可靠性
+- 更新工具类API文档中关于数学工具和公共基础设施依赖关系的说明
+- 添加MathUtilities的详细使用指南和最佳实践
 
 ## 目录
 1. [简介](#简介)
@@ -21,15 +32,17 @@
 3. [核心组件总览](#核心组件总览)
 4. [架构概览](#架构概览)
 5. [详细组件分析](#详细组件分析)
-6. [依赖关系分析](#依赖关系分析)
-7. [性能考量](#性能考量)
-8. [故障排查指南](#故障排查指南)
-9. [结论](#结论)
-10. [附录：使用示例与最佳实践](#附录使用示例与最佳实践)
+6. [数学工具类详解](#数学工具类详解)
+7. [依赖关系分析](#依赖关系分析)
+8. [性能考量](#性能考量)
+9. [故障排查指南](#故障排查指南)
+10. [结论](#结论)
+11. [附录：使用示例与最佳实践](#附录使用示例与最佳实践)
 
 ## 简介
 本文件为Quill日志库中的工具类API文档，聚焦以下实用工具：
 - 字符串处理：to_hex（十六进制格式化）
+- 数学工具：MathUtilities（幂运算检测、对数计算）
 - 时间测量：StopWatch（高精度计时器，支持TSC与系统时钟）
 - 用户时钟源：UserClockSource（自定义时钟接口）
 - 零拷贝字符串引用：StringRef（避免字符串复制，提升日志热路径性能）
@@ -39,6 +52,7 @@
 ## 项目结构与定位
 这些工具类位于include/quill目录下，分别承担不同层面的辅助职责：
 - Utility.h：提供通用工具函数（如to_hex）
+- MathUtilities.h：提供数学工具函数（幂运算检测、对数计算）
 - StringRef.h：零拷贝字符串包装与编解码
 - StopWatch.h：高性能计时器，支持TSC与系统时钟两种模式
 - UserClockSource.h：用户自定义时钟源基类，用于模拟或外部时间源
@@ -47,50 +61,59 @@
 graph TB
 subgraph "工具类"
 U["Utility.h<br/>to_hex"]
+MU["MathUtilities.h<br/>is_power_of_two / next_power_of_two"]
 SR["StringRef.h<br/>StringRef + Codec"]
 SW["StopWatch.h<br/>StopWatchTsc / StopWatchChrono"]
 UCS["UserClockSource.h<br/>UserClockSource"]
 end
+subgraph "核心基础设施"
+C["Common.h<br/>QUILL_ASSERT / Cache Line Constants"]
+A["Attributes.h<br/>QUILL_NODISCARD / QUILL_BEGIN_NAMESPACE"]
+end
 subgraph "核心编解码"
-C["Codec.h<br/>通用编解码框架"]
 DFC["DeferredFormatCodec.h<br/>延迟格式化编解码"]
 end
-SR --> C
+MU --> C
+U --> A
+SR --> DFC
 SW --> DFC
 UCS --> |"派生实现"| UCS
-U --> |"被调用"| U
 ```
 
 **图表来源**
 - [Utility.h:18-118](file://include/quill/Utility.h#L18-L118)
+- [MathUtilities.h:1-73](file://include/quill/core/MathUtilities.h#L1-L73)
 - [StringRef.h:32-85](file://include/quill/StringRef.h#L32-L85)
 - [StopWatch.h:44-124](file://include/quill/StopWatch.h#L44-L124)
 - [UserClockSource.h:25-39](file://include/quill/UserClockSource.h#L25-L39)
-- [Codec.h:144-200](file://include/quill/core/Codec.h#L144-L200)
-- [DeferredFormatCodec.h:90-181](file://include/quill/DeferredFormatCodec.h#L90-L181)
+- [Common.h:119-183](file://include/quill/core/Common.h#L119-L183)
+- [Attributes.h:9-18](file://include/quill/core/Attributes.h#L9-L18)
 
 **章节来源**
 - [Utility.h:18-118](file://include/quill/Utility.h#L18-L118)
+- [MathUtilities.h:1-73](file://include/quill/core/MathUtilities.h#L1-L73)
 - [StringRef.h:32-85](file://include/quill/StringRef.h#L32-L85)
 - [StopWatch.h:44-124](file://include/quill/StopWatch.h#L44-L124)
 - [UserClockSource.h:25-39](file://include/quill/UserClockSource.h#L25-L39)
 
 ## 核心组件总览
 - to_hex：将任意字节缓冲区转换为十六进制字符串，支持大小写与空格分隔控制，内部采用查表+循环展开优化，适合二进制数据日志与调试。
-- StringRef：将字符串参数标记为“按引用传递”，避免复制，配合编解码器在热路径上零拷贝传输。
+- MathUtilities：提供幂运算检测和对数计算功能，包含is_power_of_two、max_power_of_two、next_power_of_two等函数，增强数学运算的可靠性和性能。
+- StringRef：将字符串参数标记为"按引用传递"，避免复制，配合编解码器在热路径上零拷贝传输。
 - StopWatch：封装起始时间点，提供elapsed/elapsed_as/reset等接口；支持TSC（高分辨率）与系统时钟（更稳定）两种模式。
 - UserClockSource：抽象基类，派生类需实现now()返回纳秒级时间戳，适用于仿真、回放或统一时间源场景。
 
 **章节来源**
 - [Utility.h:31-118](file://include/quill/Utility.h#L31-L118)
+- [MathUtilities.h:17-70](file://include/quill/core/MathUtilities.h#L17-L70)
 - [StringRef.h:32-85](file://include/quill/StringRef.h#L32-L85)
 - [StopWatch.h:44-124](file://include/quill/StopWatch.h#L44-L124)
 - [UserClockSource.h:25-39](file://include/quill/UserClockSource.h#L25-L39)
 
 ## 架构概览
 工具类与日志系统的交互路径如下：
-- 日志宏在前端线程捕获参数，对可直接编码类型走快速路径；对复杂类型（如StopWatch、StringRef）通过编解码器序列化到队列。
-- 后端线程消费消息，格式化输出；StopWatch在格式化阶段以秒为单位输出浮点数；StringRef在后端解析为string_view并安全输出。
+- 日志宏在前端线程捕获参数，对可直接编码类型走快速路径；对复杂类型（如StopWatch、StringRef、MathUtilities）通过编解码器序列化到队列。
+- 后端线程消费消息，格式化输出；StopWatch在格式化阶段以秒为单位输出浮点数；StringRef在后端解析为string_view并安全输出；MathUtilities函数在编译时计算结果，零运行时开销。
 
 ```mermaid
 sequenceDiagram
@@ -152,7 +175,7 @@ Remainder --> ReturnHex["返回十六进制字符串"]
 - 关键特性：
   - 构造函数支持std::string、std::string_view、C风格字符串及带长度的C字符串
   - 编解码器将指针与长度打包，后端解析为string_view安全输出
-  - 默认所有字符串都会复制，使用StringRef显式声明“按引用传递”
+  - 默认所有字符串都会复制，使用StringRef显式声明"按引用传递"
 - 性能优势：
   - 避免std::string构造与拷贝
   - 减少队列中字节流大小
@@ -258,28 +281,74 @@ UserClockSource <|-- SimulatedClock
 - [UserClockSource.h:25-39](file://include/quill/UserClockSource.h#L25-L39)
 - [user_clock_source.cpp:23-47](file://examples/user_clock_source.cpp#L23-L47)
 
+## 数学工具类详解
+
+### MathUtilities（数学工具函数）
+- 设计目的：提供高效的数学运算工具函数，特别是在日志系统中需要进行幂运算检测和对数计算的场景。
+- 关键特性：
+  - is_power_of_two：检测数字是否为2的幂次方，使用位运算实现O(1)时间复杂度
+  - max_power_of_two：计算类型的最大2的幂次方，利用std::numeric_limits获取边界值
+  - next_power_of_two：将数字向上舍入到下一个2的幂次方，包含溢出保护和断言验证
+  - 所有函数均为constexpr，可在编译时计算结果，零运行时开销
+  - 依赖Common.h中的QUILL_ASSERT进行运行时断言验证
+- 性能优势：
+  - 位运算实现，避免昂贵的除法和取模操作
+  - constexpr函数在编译时求值，运行时无额外开销
+  - 断言仅在调试模式下启用，发布版本无性能影响
+- 使用场景：
+  - 日志缓冲区大小调整和内存对齐计算
+  - 队列容量动态调整和哈希表大小计算
+  - 性能关键路径中的幂运算检测
+
+```mermaid
+flowchart TD
+Start(["进入 next_power_of_two"]) --> CheckMax["检查是否超过最大2的幂次方"]
+CheckMax --> |是| ReturnMax["返回最大2的幂次方"]
+CheckMax --> |否| CheckPower["检查是否已经是2的幂次方"]
+CheckPower --> |是| ReturnN["直接返回n"]
+CheckPower --> |否| InitResult["初始化result=1"]
+InitResult --> Loop["循环左移result直到>=n"]
+Loop --> Assert["断言result为2的幂次方"]
+Assert --> ReturnResult["返回result"]
+```
+
+**图表来源**
+- [MathUtilities.h:45-70](file://include/quill/core/MathUtilities.h#L45-L70)
+
+**章节来源**
+- [MathUtilities.h:17-70](file://include/quill/core/MathUtilities.h#L17-L70)
+- [MathUtilitiesTest.cpp:11-81](file://test/unit_tests/MathUtilitiesTest.cpp#L11-L81)
+
 ## 依赖关系分析
+- MathUtilities依赖Common.h提供QUILL_ASSERT断言机制和命名空间定义，增强了数学工具函数的可靠性。
 - StringRef依赖编解码框架（Codec与DynamicFormatArgStore），在序列化时仅写入指针与长度，在反序列化时恢复为string_view。
 - StopWatch依赖格式化编解码（DeferredFormatCodec）与底层时间源（TSC或steady_clock），并在格式化器中以double秒输出。
 - to_hex为独立工具函数，无运行时依赖，但被单元测试覆盖广泛。
 - UserClockSource作为抽象接口，与Logger创建流程结合，影响日志时间戳来源。
+- 所有工具类都依赖Attributes.h提供的命名空间包装和编译器兼容性宏。
 
 ```mermaid
 graph LR
-SR["StringRef"] --> C["Codec"]
+MU["MathUtilities"] --> C["Common.h<br/>QUILL_ASSERT / Cache Line"]
+MU --> A["Attributes.h<br/>QUILL_NODISCARD / Namespace"]
+SR["StringRef"] --> C
 SW["StopWatch"] --> DFC["DeferredFormatCodec"]
 SW --> CLK["TSC/steay_clock"]
-U["to_hex"] --> U
+U["to_hex"] --> A
 UCS["UserClockSource"] --> LOG["Logger(用户时钟)"]
 ```
 
 **图表来源**
+- [MathUtilities.h:9-10](file://include/quill/core/MathUtilities.h#L9-L10)
+- [Common.h:119-183](file://include/quill/core/Common.h#L119-L183)
+- [Attributes.h:9-18](file://include/quill/core/Attributes.h#L9-L18)
 - [StringRef.h:48-85](file://include/quill/StringRef.h#L48-L85)
 - [StopWatch.h:128-143](file://include/quill/StopWatch.h#L128-L143)
-- [Codec.h:144-200](file://include/quill/core/Codec.h#L144-L200)
-- [DeferredFormatCodec.h:90-181](file://include/quill/DeferredFormatCodec.h#L90-L181)
 
 **章节来源**
+- [MathUtilities.h:9-10](file://include/quill/core/MathUtilities.h#L9-L10)
+- [Common.h:119-183](file://include/quill/core/Common.h#L119-L183)
+- [Attributes.h:9-18](file://include/quill/core/Attributes.h#L9-L18)
 - [StringRef.h:48-85](file://include/quill/StringRef.h#L48-L85)
 - [StopWatch.h:128-143](file://include/quill/StopWatch.h#L128-L143)
 - [Codec.h:144-200](file://include/quill/core/Codec.h#L144-L200)
@@ -289,6 +358,10 @@ UCS["UserClockSource"] --> LOG["Logger(用户时钟)"]
 - to_hex
   - 时间复杂度O(n)，空间O(n)，循环展开减少分支
   - 查表法避免除法，适合高频二进制数据打印
+- MathUtilities
+  - 所有函数为constexpr，编译时求值，运行时零开销
+  - 位运算实现，O(1)时间复杂度，避免昂贵的数学运算
+  - 断言仅在调试模式启用，发布版本无性能影响
 - StringRef
   - 零拷贝，避免std::string构造与队列扩容
   - 注意字符串生命周期管理，避免悬垂访问
@@ -298,13 +371,15 @@ UCS["UserClockSource"] --> LOG["Logger(用户时钟)"]
 - UserClockSource
   - 自定义实现需保证线程安全与高频率调用下的低开销
 
-[本节为通用性能讨论，无需特定文件来源]
-
 ## 故障排查指南
 - to_hex
   - 输入为空指针或长度为0时返回空字符串，属预期行为
   - 若出现异常字符或乱码，检查输入缓冲区是否为字节类型且大小写设置正确
   - 单元测试覆盖了多种边界与特殊值，可参考测试用例定位问题
+- MathUtilities
+  - next_power_of_two在接近类型最大值时可能返回最大2的幂次方，这是预期行为
+  - 断言失败通常表示输入参数超出预期范围或类型不匹配
+  - 测试用例覆盖了各种边界情况，可参考定位问题
 - StringRef
   - 若输出为空或崩溃，检查被包装字符串的生命周期是否覆盖后端解析
   - 避免在日志后修改已传入的字符串内容
@@ -317,17 +392,17 @@ UCS["UserClockSource"] --> LOG["Logger(用户时钟)"]
 
 **章节来源**
 - [UtilityTest.cpp:119-131](file://test/unit_tests/UtilityTest.cpp#L119-L131)
+- [MathUtilitiesTest.cpp:11-81](file://test/unit_tests/MathUtilitiesTest.cpp#L11-L81)
 - [StringRefTest.cpp:49-57](file://test/integration_tests/StringRefTest.cpp#L49-L57)
 - [StopWatchTest.cpp:8-56](file://test/unit_tests/StopWatchTest.cpp#L8-L56)
 - [user_clock_source.cpp:55-59](file://examples/user_clock_source.cpp#L55-L59)
 
 ## 结论
-- to_hex、StringRef、StopWatch、UserClockSource共同构成了Quill在字符串处理、计时与时间源方面的基础工具集。
-- 在高频日志场景中，合理使用StringRef与StopWatch TSC模式可显著降低开销。
+- to_hex、MathUtilities、StringRef、StopWatch、UserClockSource共同构成了Quill在字符串处理、数学运算、计时与时间源方面的完整工具集。
+- MathUtilities的加入增强了数学运算的可靠性和性能，特别是幂运算检测和对数计算功能。
+- 在高频日志场景中，合理使用StringRef、MathUtilities constexpr函数和StopWatch TSC模式可显著降低开销。
 - 对于需要严格时间顺序或跨平台一致性的场景，建议使用System模式或UserClockSource。
 - 建议在生产环境中结合单元测试与集成测试验证工具类的行为与性能表现。
-
-[本节为总结性内容，无需特定文件来源]
 
 ## 附录：使用示例与最佳实践
 
@@ -338,6 +413,15 @@ UCS["UserClockSource"] --> LOG["Logger(用户时钟)"]
 
 **章节来源**
 - [UtilityTest.cpp:10-401](file://test/unit_tests/UtilityTest.cpp#L10-L401)
+
+### MathUtilities 使用要点
+- is_power_of_two用于检测缓冲区大小或队列容量是否为2的幂次方
+- next_power_of_two用于动态调整内存分配大小，确保缓存行对齐
+- 在性能关键路径中使用，所有函数为constexpr，编译时求值
+- 注意边界情况处理，特别是接近类型最大值的情况
+
+**章节来源**
+- [MathUtilitiesTest.cpp:11-81](file://test/unit_tests/MathUtilitiesTest.cpp#L11-L81)
 
 ### StringRef 使用要点
 - 显式包裹需要零拷贝的字符串参数
