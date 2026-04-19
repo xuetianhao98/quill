@@ -12,6 +12,14 @@
 - [UnboundedQueueTest.cpp](file://test/unit_tests/UnboundedQueueTest.cpp)
 </cite>
 
+## Update Summary
+**Changes Made**
+- Enhanced cache-line optimization implementation documentation with improved member variable responsibility tracking
+- Updated cache-line flush and prefetch mechanisms with better responsibility separation
+- Improved documentation of `_last_flushed_writer_pos` and `_last_flushed_reader_pos` member variables
+- Added detailed explanation of cache-line alignment responsibilities in both producer and consumer contexts
+- Enhanced hardware-specific optimization documentation with clearer member variable roles
+
 ## Table of Contents
 1. [Introduction](#introduction)
 2. [Project Structure](#project-structure)
@@ -63,36 +71,36 @@ T2 --> B
 ```
 
 **Diagram sources**
-- [BoundedSPSCQueue.h:1-356](file://include/quill/core/BoundedSPSCQueue.h#L1-L356)
+- [BoundedSPSCQueue.h:1-358](file://include/quill/core/BoundedSPSCQueue.h#L1-L358)
 - [UnboundedSPSCQueue.h:1-345](file://include/quill/core/UnboundedSPSCQueue.h#L1-L345)
-- [Common.h:129-180](file://include/quill/core/Common.h#L129-L180)
+- [Common.h:120-183](file://include/quill/core/Common.h#L120-L183)
 - [MathUtilities.h:1-73](file://include/quill/core/MathUtilities.h#L1-L73)
-- [Attributes.h:104-148](file://include/quill/core/Attributes.h#L104-L148)
+- [Attributes.h:100-181](file://include/quill/core/Attributes.h#L100-L181)
 - [FrontendOptions.h:16-50](file://include/quill/core/FrontendOptions.h#L16-L50)
 - [BoundedQueueTest.cpp:1-146](file://test/unit_tests/BoundedQueueTest.cpp#L1-L146)
 - [UnboundedQueueTest.cpp:1-160](file://test/unit_tests/UnboundedQueueTest.cpp#L1-L160)
 
 **Section sources**
-- [BoundedSPSCQueue.h:1-356](file://include/quill/core/BoundedSPSCQueue.h#L1-L356)
+- [BoundedSPSCQueue.h:1-358](file://include/quill/core/BoundedSPSCQueue.h#L1-L358)
 - [UnboundedSPSCQueue.h:1-345](file://include/quill/core/UnboundedSPSCQueue.h#L1-L345)
-- [Common.h:129-180](file://include/quill/core/Common.h#L129-L180)
+- [Common.h:120-183](file://include/quill/core/Common.h#L120-L183)
 - [MathUtilities.h:1-73](file://include/quill/core/MathUtilities.h#L1-L73)
-- [Attributes.h:104-148](file://include/quill/core/Attributes.h#L104-L148)
+- [Attributes.h:100-181](file://include/quill/core/Attributes.h#L100-L181)
 - [FrontendOptions.h:16-50](file://include/quill/core/FrontendOptions.h#L16-L50)
 - [BoundedQueueTest.cpp:1-146](file://test/unit_tests/BoundedQueueTest.cpp#L1-L146)
 - [UnboundedQueueTest.cpp:1-160](file://test/unit_tests/UnboundedQueueTest.cpp#L1-L160)
 
 ## Core Components
 - BoundedSPSCQueueImpl<T>: Fixed-capacity, lock-free ring buffer with:
-  - Atomic writer and reader positions
-  - Reader-side batching to amortize atomic updates
-  - Hardware-specific cache-line flush/prefetch on x86
-  - Huge page allocation support on Linux
+  - Atomic writer and reader positions with dedicated cache-line alignment
+  - Reader-side batching to amortize atomic updates with optimized batch thresholds
+  - Hardware-specific cache-line flush/prefetch on x86 with improved responsibility tracking
+  - Huge page allocation support on Linux with fallback behavior
   - Power-of-two capacity and bitmask indexing
 - UnboundedSPSCQueue: Producer-driven growth via linked list of bounded buffers with:
-  - Node-based chaining with atomic next pointers
+  - Node-based chaining with atomic next pointers aligned to cache line boundaries
   - Capacity doubling until a configurable maximum
-  - Seamless handover from old to new buffer during reads
+  - Seamless handover from old to new buffer during reads with proper cleanup
 
 Key constants and policies:
 - Cache line size and alignment: [Common.h:129-130](file://include/quill/core/Common.h#L129-L130)
@@ -107,9 +115,9 @@ Key constants and policies:
 
 ## Architecture Overview
 The SPSC queues implement a lock-free, cache-line-aware ring buffer with:
-- Position tracking via aligned atomics for producer and consumer
-- Reader-side batching to reduce atomic writes
-- Optional x86-specific cache-line flush/prefetch
+- Position tracking via aligned atomics for producer and consumer with dedicated responsibility separation
+- Reader-side batching to reduce atomic writes with optimized batch thresholds
+- Optional x86-specific cache-line flush/prefetch with improved responsibility tracking
 - Memory alignment and optional huge pages for performance
 
 ```mermaid
@@ -139,18 +147,22 @@ RPos -.->|acquire| WPos
   - Capacity is rounded up to the next power of two using [MathUtilities.h:46-70](file://include/quill/core/MathUtilities.h#L46-L70)
   - Mask is capacity minus one for fast modulo indexing
   - Reader-side batch size computed as percentage of capacity for commit frequency
-- Position tracking:
-  - Writer position: local counter plus aligned atomic writer position
-  - Reader position: local counter plus aligned atomic reader position
+- Position tracking with enhanced cache-line responsibility separation:
+  - Writer position: local counter plus aligned atomic writer position with dedicated cache-line alignment
+  - Reader position: local counter plus aligned atomic reader position with dedicated cache-line alignment
   - Mutable writer position cache and reader position cache to reduce atomic loads
+  - Dedicated `_last_flushed_writer_pos` and `_last_flushed_reader_pos` member variables track cache-line flush boundaries
 - Memory ordering:
   - Writer: prepare_write loads reader with acquire; commit_write stores writer position with release
   - Reader: empty checks load writer with acquire; commit_read conditionally stores reader position with release
-- Cache-line optimization:
-  - Storage aligned to cache line boundaries
-  - On x86: flush written cache lines and prefetch future lines around write/read positions
+- Cache-line optimization with improved responsibility tracking:
+  - Storage aligned to cache line boundaries with QUILL_CACHE_LINE_ALIGNED
+  - On x86: flush written cache lines and prefetch future lines around write/read positions with responsibility separation
+  - Dedicated cache-line flush tracking for both producer and consumer
 - Huge pages:
   - Allocation path supports huge pages on Linux with fallback behavior
+
+**Updated** Enhanced cache-line optimization implementation with improved member variable responsibility tracking for both producer and consumer cache-line flush operations.
 
 ```mermaid
 classDiagram
@@ -175,6 +187,8 @@ class BoundedSPSCQueueImpl_T_ {
 -_reader_pos : integer_type
 -_writer_pos_cache : integer_type
 -_reader_pos_cache : integer_type
+-_last_flushed_writer_pos : integer_type
+-_last_flushed_reader_pos : integer_type
 }
 ```
 
@@ -188,16 +202,16 @@ class BoundedSPSCQueueImpl_T_ {
 
 ### UnboundedSPSCQueue
 - Structure:
-  - Node-based chain of bounded queues with atomic next pointer
-  - Producer and consumer pointers, each aligned to cache line boundaries
+  - Node-based chain of bounded queues with atomic next pointer aligned to cache line boundaries
+  - Producer and consumer pointers, each aligned to cache line boundaries for optimal performance
 - Growth:
   - When prepare_write fails due to insufficient space, capacity doubles until max capacity
   - commit_write is issued on the old buffer before switching
 - Handover:
   - Consumer switches to the new buffer when next is observed, commits prior reads, deletes the old node, and returns capacity change metadata
 - Capacity queries:
-  - producer_capacity returns current node’s capacity
-  - capacity returns current node’s capacity
+  - producer_capacity returns current node's capacity
+  - capacity returns current node's capacity
   - shrink reduces capacity by creating a new node and switching after the old is consumed
 
 ```mermaid
@@ -274,22 +288,31 @@ end
 - [UnboundedSPSCQueue.h:115-240](file://include/quill/core/UnboundedSPSCQueue.h#L115-L240)
 - [Common.h:129-130](file://include/quill/core/Common.h#L129-L130)
 
-### Cache Line Optimization and Prefetching
-- Storage is allocated with alignment suitable for cache line boundaries
+### Cache Line Optimization and Prefetching with Enhanced Responsibility Tracking
+- Storage is allocated with alignment suitable for cache line boundaries using QUILL_CACHE_LINE_ALIGNED
 - On x86:
-  - Writer: flush cache lines after committing and prefetch a future cache line ahead of the write cursor
-  - Reader: flush cache lines after committing batches
-- Prefetch hints are used to bring cache lines into the CPU early
+  - Writer: flush cache lines after committing and prefetch a future cache line ahead of the write cursor with dedicated responsibility tracking
+  - Reader: flush cache lines after committing batches with separate responsibility tracking
+  - Dedicated `_last_flushed_writer_pos` and `_last_flushed_reader_pos` member variables track cache-line flush boundaries
+- Prefetch hints are used to bring cache lines into the CPU early with improved boundary calculations
+- Cache-line mask constant `_QUILL_CACHE_LINE_MASK` provides efficient boundary detection
+
+**Updated** Enhanced cache-line optimization implementation with improved member variable responsibility tracking for both producer and consumer cache-line flush operations.
 
 **Section sources**
 - [BoundedSPSCQueue.h:75-94](file://include/quill/core/BoundedSPSCQueue.h#L75-L94)
 - [BoundedSPSCQueue.h:128-135](file://include/quill/core/BoundedSPSCQueue.h#L128-L135)
 - [BoundedSPSCQueue.h:165-168](file://include/quill/core/BoundedSPSCQueue.h#L165-L168)
+- [BoundedSPSCQueue.h:200-219](file://include/quill/core/BoundedSPSCQueue.h#L200-L219)
+- [BoundedSPSCQueue.h:329-333](file://include/quill/core/BoundedSPSCQueue.h#L329-L333)
 - [Common.h:129-130](file://include/quill/core/Common.h#L129-L130)
 
 ### Hardware-Specific Optimizations
-- x86 intrinsics are used for cache-line flush and prefetch
+- x86 intrinsics are used for cache-line flush and prefetch with improved responsibility tracking
 - Conditional compilation guards ensure portability
+- Dedicated cache-line flush functions `_flush_cachelines` with separate tracking for writer and reader positions
+
+**Updated** Enhanced hardware-specific optimizations with improved cache-line responsibility separation.
 
 **Section sources**
 - [BoundedSPSCQueue.h:22-39](file://include/quill/core/BoundedSPSCQueue.h#L22-L39)
@@ -330,34 +353,33 @@ AT --> US
 ```
 
 **Diagram sources**
-- [BoundedSPSCQueue.h:1-356](file://include/quill/core/BoundedSPSCQueue.h#L1-L356)
+- [BoundedSPSCQueue.h:1-358](file://include/quill/core/BoundedSPSCQueue.h#L1-L358)
 - [UnboundedSPSCQueue.h:1-345](file://include/quill/core/UnboundedSPSCQueue.h#L1-L345)
-- [Common.h:129-180](file://include/quill/core/Common.h#L129-L180)
+- [Common.h:120-183](file://include/quill/core/Common.h#L120-L183)
 - [MathUtilities.h:1-73](file://include/quill/core/MathUtilities.h#L1-L73)
-- [Attributes.h:104-148](file://include/quill/core/Attributes.h#L104-L148)
+- [Attributes.h:100-181](file://include/quill/core/Attributes.h#L100-L181)
 - [FrontendOptions.h:16-50](file://include/quill/core/FrontendOptions.h#L16-L50)
 
 **Section sources**
-- [BoundedSPSCQueue.h:1-356](file://include/quill/core/BoundedSPSCQueue.h#L1-L356)
+- [BoundedSPSCQueue.h:1-358](file://include/quill/core/BoundedSPSCQueue.h#L1-L358)
 - [UnboundedSPSCQueue.h:1-345](file://include/quill/core/UnboundedSPSCQueue.h#L1-L345)
-- [Common.h:129-180](file://include/quill/core/Common.h#L129-L180)
+- [Common.h:120-183](file://include/quill/core/Common.h#L120-L183)
 - [MathUtilities.h:1-73](file://include/quill/core/MathUtilities.h#L1-L73)
-- [Attributes.h:104-148](file://include/quill/core/Attributes.h#L104-L148)
+- [Attributes.h:100-181](file://include/quill/core/Attributes.h#L100-L181)
 - [FrontendOptions.h:16-50](file://include/quill/core/FrontendOptions.h#L16-L50)
 
 ## Performance Considerations
 - Wait-free production and consumption:
-  - Bounded queue: wait-free for producer and consumer
+  - Bounded queue: wait-free for producer and consumer with enhanced cache-line responsibility separation
   - Unbounded queue: producer grows without blocking; consumer remains wait-free unless switching nodes
 - Reduced atomic contention:
-  - Reader batching lowers frequency of atomic reader position updates
+  - Reader batching lowers frequency of atomic reader position updates with optimized batch thresholds
   - Local caches for positions minimize atomic operations
 - Cache-line awareness:
-  - Aligned storage and flush/prefetch reduce false sharing and improve throughput
+  - Aligned storage and flush/prefetch reduce false sharing and improve throughput with dedicated responsibility tracking
+  - Separate cache-line flush tracking for producer and consumer improves performance isolation
 - Huge pages:
   - Lower TLB pressure on Linux when enabled via policy
-
-[No sources needed since this section provides general guidance]
 
 ## Troubleshooting Guide
 - Symptom: Reader observes empty despite producer writing
@@ -375,6 +397,11 @@ AT --> US
 - Symptom: Failure to allocate huge pages
   - Cause: Policy set to Always or insufficient privileges
   - Fix: Use Try policy or adjust OS permissions; fallback to normal pages is automatic when policy is Try
+- Symptom: Cache-line flush issues
+  - Cause: Improper cache-line flush boundaries or responsibility tracking
+  - Fix: Verify `_last_flushed_writer_pos` and `_last_flushed_reader_pos` are properly maintained; ensure QUILL_CACHE_LINE_MASK is correctly applied
+
+**Updated** Added troubleshooting guidance for cache-line flush issues with specific member variable responsibility tracking.
 
 **Section sources**
 - [BoundedSPSCQueue.h:123-136](file://include/quill/core/BoundedSPSCQueue.h#L123-L136)
@@ -383,9 +410,7 @@ AT --> US
 - [FrontendOptions.h:44-49](file://include/quill/core/FrontendOptions.h#L44-L49)
 
 ## Conclusion
-Quill’s SPSC queues provide efficient, lock-free inter-thread communication with careful attention to memory ordering, cache-line alignment, and platform-specific optimizations. The bounded variant offers predictable sizing and minimal overhead, while the unbounded variant adapts to workload growth up to a configurable limit. Proper usage of the prepare/finish/commit cycle and understanding of batching and huge page policies are essential for optimal performance and correctness.
-
-[No sources needed since this section summarizes without analyzing specific files]
+Quill's SPSC queues provide efficient, lock-free inter-thread communication with careful attention to memory ordering, cache-line alignment, and platform-specific optimizations. The bounded variant offers predictable sizing and minimal overhead with enhanced cache-line responsibility tracking, while the unbounded variant adapts to workload growth up to a configurable limit. Proper usage of the prepare/finish/commit cycle and understanding of batching, huge page policies, and cache-line responsibility separation are essential for optimal performance and correctness.
 
 ## Appendices
 

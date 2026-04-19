@@ -10,11 +10,20 @@
 - [BoundedSPSCQueue.h](file://include/quill/core/BoundedSPSCQueue.h)
 - [BackendUtilities.h](file://include/quill/backend/BackendUtilities.h)
 - [BackendOptions.h](file://include/quill/backend/BackendOptions.h)
+- [CMakeLists.txt](file://CMakeLists.txt)
+- [quill-targets.cmake](file://build/CMakeFiles/Export/5499b0c1ebbfc17d8402dee716121ed8/quill-targets.cmake)
 - [backend_tsc_clock.cpp](file://examples/backend_tsc_clock.cpp)
 - [quill_hot_path_rdtsc_clock.cpp](file://benchmarks/hot_path_latency/quill_hot_path_rdtsc_clock.cpp)
 - [RdtscClockTest.cpp](file://test/unit_tests/RdtscClockTest.cpp)
 - [BackendTscClockTest.cpp](file://test/integration_tests/BackendTscClockTest.cpp)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Enhanced x86 architecture-specific optimizations documentation with improved cache-line related constants organization
+- Updated position tracking variables documentation for better cache coherence management
+- Added detailed explanation of QUILL_X86ARCH compilation flag and its impact on hardware optimizations
+- Expanded cache-line flush and prefetch optimization sections with specific instruction details
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -28,7 +37,9 @@
 9. [Conclusion](#conclusion)
 
 ## Introduction
-This document explains Quill’s hardware-specific optimization techniques with a focus on high-resolution timing via TSC (Time Stamp Counter), platform-specific instruction usage, memory layout and access optimizations, NUMA-awareness and CPU affinity, and virtual memory strategies. It also covers how the backend synchronizes TSC-based timestamps with system time, and how users can configure the backend for optimal multi-core scaling and low-latency logging.
+This document explains Quill's hardware-specific optimization techniques with a focus on high-resolution timing via TSC (Time Stamp Counter), platform-specific instruction usage, memory layout and access optimizations, NUMA-awareness and CPU affinity, and virtual memory strategies. It also covers how the backend synchronizes TSC-based timestamps with system time, and how users can configure the backend for optimal multi-core scaling and low-latency logging.
+
+**Updated** Enhanced documentation now reflects improved x86 architecture-specific optimizations with better organization of cache-line related constants and position tracking variables for enhanced cache coherence and performance.
 
 ## Project Structure
 The hardware-related optimizations span a few key areas:
@@ -109,6 +120,8 @@ J --> H
   - CPU affinity setter for Windows/macOS/Linux
   - Resync interval for TSC-to-wall-time synchronization
   - Busy-wait vs yield policy and sleep duration tuning
+
+**Updated** Enhanced x86 architecture-specific optimizations now include improved cache-line related constants organization and optimized position tracking variables for better cache coherence management.
 
 **Section sources**
 - [Rdtsc.h:42-110](file://include/quill/core/Rdtsc.h#L42-L110)
@@ -220,49 +233,65 @@ L --> |No| N["Fallback to steady clock"]
 - [Rdtsc.h:15-36](file://include/quill/core/Rdtsc.h#L15-L36)
 - [Rdtsc.h:42-110](file://include/quill/core/Rdtsc.h#L42-L110)
 
-### Memory Layout and Access Optimizations
-- Cache-line constants and alignment:
-  - Defines cache-line size and alignment constants used across the codebase
-- Cache-line flush:
-  - Uses flush primitive to write out modified cache lines during bulk operations
-- Alignment helpers:
-  - Pointer alignment and power-of-two sizing utilities
-- Huge pages:
-  - Linux mmap with optional huge TLB flag and fallback policy
+### Enhanced x86 Architecture-Specific Optimizations
+
+**Updated** The x86 architecture-specific optimizations have been significantly improved with better organization of cache-line related constants and optimized position tracking variables.
+
+#### Cache-Line Related Constants Organization
+- Cache-line constants are now centrally defined in Common.h with:
+  - `QUILL_CACHE_LINE_SIZE`: 64-byte cache line size
+  - `QUILL_CACHE_LINE_ALIGNED`: 128-byte alignment (2x cache line)
+- Position tracking variables are now organized with dedicated cache-line boundaries:
+  - `_last_flushed_writer_pos` and `_last_flushed_reader_pos` track flushed positions
+  - Cache-line mask constant `QUILL_CACHE_LINE_MASK` for efficient masking operations
+
+#### Cache-Line Flush and Prefetch Optimizations
+- **Initialization Phase**:
+  - Pre-flushes all cache lines during queue construction to remove log memory from cache
+  - Prefetches initial cache lines based on queue capacity (16 or 32 lines)
+  - Minimum capacity requirement of 1024 elements for optimal prefetching
+
+- **Runtime Cache-Line Management**:
+  - Efficient cache-line flush loop with pre-computed base pointers
+  - Optimized flush operations using `_mm_clflushopt` for modern x86 processors
+  - Predictive prefetching of future cache lines (10 lines ahead)
+  - Batch-based flushing to minimize cache-line invalidation overhead
 
 ```mermaid
-classDiagram
-class Common {
-+QUILL_CACHE_LINE_SIZE
-+QUILL_CACHE_LINE_ALIGNED
-}
-class BoundedSPSCQueue {
-+_alloc_aligned(size, alignment, huge_pages_policy)
-+_free_aligned(ptr)
-+_fast_average(a,b)
-+_align_pointer(ptr, alignment)
-}
-class MathUtilities {
-+is_power_of_two(n)
-+next_power_of_two(n)
-}
-Common <.. BoundedSPSCQueue : "uses constants"
-MathUtilities <.. BoundedSPSCQueue : "uses helpers"
+flowchart TD
+A["Queue Initialization"] --> B["Pre-flush all cache lines"]
+B --> C["Prefetch initial cache lines"]
+C --> D{"Capacity >= 2048?"}
+D --> |Yes| E["Prefetch 32 lines"]
+D --> |No| F["Prefetch 16 lines"]
+E --> G["Ready"]
+F --> G["Ready"]
+H["Write Operation"] --> I["Commit write"]
+I --> J["_flush_cachelines()"]
+J --> K["Calculate cache-line differences"]
+K --> L["Optimized flush loop"]
+L --> M["_mm_clflushopt(ptr)"]
+M --> N["Prefetch next cache line"]
+N --> O["Update last flushed position"]
+P["Read Operation"] --> Q["Batch commit read"]
+Q --> R["Conditional flush"]
+R --> S["_flush_cachelines()"]
+S --> T["Flush dirty cache lines"]
 ```
 
 **Diagram sources**
-- [Common.h:123-131](file://include/quill/core/Common.h#L123-L131)
-- [BoundedSPSCQueue.h:210-219](file://include/quill/core/BoundedSPSCQueue.h#L210-L219)
-- [BoundedSPSCQueue.h:228-234](file://include/quill/core/BoundedSPSCQueue.h#L228-L234)
-- [BoundedSPSCQueue.h:246-303](file://include/quill/core/BoundedSPSCQueue.h#L246-L303)
-- [MathUtilities.h:25-70](file://include/quill/core/MathUtilities.h#L25-L70)
+- [BoundedSPSCQueue.h:75-94](file://include/quill/core/BoundedSPSCQueue.h#L75-L94)
+- [BoundedSPSCQueue.h:128-135](file://include/quill/core/BoundedSPSCQueue.h#L128-L135)
+- [BoundedSPSCQueue.h:165-168](file://include/quill/core/BoundedSPSCQueue.h#L165-L168)
+- [BoundedSPSCQueue.h:200-219](file://include/quill/core/BoundedSPSCQueue.h#L200-L219)
 
 **Section sources**
 - [Common.h:123-131](file://include/quill/core/Common.h#L123-L131)
-- [BoundedSPSCQueue.h:210-219](file://include/quill/core/BoundedSPSCQueue.h#L210-L219)
-- [BoundedSPSCQueue.h:228-234](file://include/quill/core/BoundedSPSCQueue.h#L228-L234)
-- [BoundedSPSCQueue.h:246-303](file://include/quill/core/BoundedSPSCQueue.h#L246-L303)
-- [MathUtilities.h:25-70](file://include/quill/core/MathUtilities.h#L25-L70)
+- [BoundedSPSCQueue.h:75-94](file://include/quill/core/BoundedSPSCQueue.h#L75-L94)
+- [BoundedSPSCQueue.h:128-135](file://include/quill/core/BoundedSPSCQueue.h#L128-L135)
+- [BoundedSPSCQueue.h:165-168](file://include/quill/core/BoundedSPSCQueue.h#L165-L168)
+- [BoundedSPSCQueue.h:200-219](file://include/quill/core/BoundedSPSCQueue.h#L200-L219)
+- [BoundedSPSCQueue.h:330-333](file://include/quill/core/BoundedSPSCQueue.h#L330-L333)
 
 ### NUMA Awareness, CPU Affinity, and Multi-Core Scaling
 - CPU affinity:
@@ -373,8 +402,12 @@ BackendOpts --> RdtscClock
   - enable_yield_when_idle and sleep_duration balance CPU usage and latency
 - Huge pages:
   - Reduces TLB pressure and improves throughput on large allocations
+- **x86-specific optimizations**:
+  - Enhanced cache-line flush operations using `_mm_clflushopt`
+  - Predictive prefetching reduces cache miss penalties
+  - Optimized position tracking minimizes atomic operations
 
-[No sources needed since this section provides general guidance]
+**Updated** Enhanced x86-specific optimizations now provide significant performance improvements through better cache-line management and reduced atomic contention.
 
 ## Troubleshooting Guide
 - TSC synchronization failures:
@@ -383,6 +416,12 @@ BackendOpts --> RdtscClock
   - Platform-specific errors are surfaced via exceptions; verify permissions and core IDs
 - Validation:
   - Unit and integration tests confirm TSC-to-wall-time bounds and backend synchronization
+- **x86-specific issues**:
+  - QUILL_X86ARCH compilation flag must be enabled for x86 optimizations
+  - Requires `-march="..."` compiler flag for target architecture specification
+  - Cache-line optimizations require minimum queue capacity of 1024 elements
+
+**Updated** Added troubleshooting guidance for x86-specific optimization issues and compilation requirements.
 
 **Section sources**
 - [RdtscClock.h:136-143](file://include/quill/backend/RdtscClock.h#L136-L143)
@@ -392,4 +431,6 @@ BackendOpts --> RdtscClock
 - [BackendTscClockTest.cpp:45-65](file://test/integration_tests/BackendTscClockTest.cpp#L45-L65)
 
 ## Conclusion
-Quill’s hardware optimizations center on precise, platform-aware timing and efficient memory/data-path handling. The backend’s TSC clock provides high-resolution, synchronized timestamps with robust calibration and resync logic. Memory utilities enforce cache-line alignment and support huge pages for large buffers. Backend options expose CPU affinity and scheduling knobs for predictable, scalable multi-core operation. Together, these techniques deliver low-latency, high-throughput logging across diverse platforms.
+Quill's hardware optimizations center on precise, platform-aware timing and efficient memory/data-path handling. The backend's TSC clock provides high-resolution, synchronized timestamps with robust calibration and resync logic. Memory utilities enforce cache-line alignment and support huge pages for large buffers. Backend options expose CPU affinity and scheduling knobs for predictable, scalable multi-core operation. 
+
+**Updated** The enhanced x86 architecture-specific optimizations now provide significant performance improvements through better cache-line management, optimized position tracking, and advanced prefetching strategies. The QUILL_X86ARCH compilation flag enables these optimizations, requiring proper target architecture specification with `-march="..."` for optimal results. Together, these techniques deliver low-latency, high-throughput logging across diverse platforms with particular emphasis on x86 performance characteristics.

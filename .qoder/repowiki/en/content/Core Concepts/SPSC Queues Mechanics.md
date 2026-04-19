@@ -16,6 +16,12 @@
 - [BoundedQueueTest.cpp](file://test/unit_tests/BoundedQueueTest.cpp)
 </cite>
 
+## Update Summary
+**Changes Made**
+- Updated BoundedSPSCQueue implementation analysis to reflect improved code organization and maintainability
+- Enhanced documentation of member variable grouping and #ifdef guard placement improvements
+- Added detailed explanation of the reorganized code structure for better readability
+
 ## Table of Contents
 1. [Introduction](#introduction)
 2. [Project Structure](#project-structure)
@@ -29,7 +35,7 @@
 10. [Appendices](#appendices)
 
 ## Introduction
-This document explains Quill’s Single-Producer Single-Consumer (SPSC) queue design and mechanics. It covers the lock-free implementation, memory ordering guarantees, zero-copy message passing, and the differences between bounded and unbounded queues. It also documents the TransitEvent structure, serialization of log messages, memory management, and practical configuration and tuning guidance for different use cases.
+This document explains Quill's Single-Producer Single-Consumer (SPSC) queue design and mechanics. It covers the lock-free implementation, memory ordering guarantees, zero-copy message passing, and the differences between bounded and unbounded queues. It also documents the TransitEvent structure, serialization of log messages, memory management, and practical configuration and tuning guidance for different use cases.
 
 ## Project Structure
 Quill organizes SPSC queue logic under core headers and integrates with backend components for event buffering and serialization. The frontend exposes queue configuration and runtime controls.
@@ -91,7 +97,7 @@ IT1 --> FE
 - [BoundedDroppingQueueTest.cpp:15-22](file://test/integration_tests/BoundedDroppingQueueTest.cpp#L15-L22)
 
 ## Core Components
-- BoundedSPSCQueue: Fixed-capacity, lock-free ring buffer with aligned storage and cache-line aware operations. Uses atomic positions and explicit cache flush/prefetch on x86.
+- BoundedSPSCQueue: Fixed-capacity, lock-free ring buffer with aligned storage and cache-line aware operations. Uses atomic positions and explicit cache flush/prefetch on x86. **Enhanced** with improved code organization and member variable grouping for better readability and maintainability.
 - UnboundedSPSCQueue: Producer-driven linked list of bounded queues with exponential growth and controlled maximum capacity. Supports shrinking and seamless handoff between nodes.
 - TransitEvent: Zero-copy message container holding formatted logs, metadata, and optional runtime metadata. Uses move semantics and manual buffer copies for safety.
 - TransitEventBuffer: Circular buffer for backend-side event batching with dynamic expansion and optional shrink-to-initial.
@@ -139,6 +145,12 @@ BE->>BE : "format and emit to sinks"
 - Cache optimization: Prefetch and flush operations on x86 architectures reduce cache misses and ensure coherency.
 - Capacity and batching: Reader commits in batches to reduce atomic contention; batch size derived from a percentage of capacity.
 - Allocation: Platform-specific aligned allocation with optional huge pages support.
+
+**Enhanced Code Organization**: The implementation now features improved code readability through:
+- Better #ifdef guard placement for platform-specific optimizations
+- Logical grouping of member variables by purpose and usage
+- Clear separation between public interface, private implementation, and platform-specific sections
+- Organized helper functions and utility methods
 
 Key operations:
 - prepare_write(n): Reserve contiguous space; return nullptr if insufficient space.
@@ -337,7 +349,7 @@ TE --> CODEC["Codec.h"]
 - [Frontend.h:72-111](file://include/quill/Frontend.h#L72-L111)
 
 ## Conclusion
-Quill’s SPSC queues provide efficient, lock-free inter-thread communication for logging. Bounded queues offer deterministic behavior and low overhead, while unbounded queues adapt to workload bursts with controlled growth and optional shrinking. TransitEvent and the codec system enable zero-copy message passing and flexible serialization. Proper configuration of queue types, capacities, and memory policies yields optimal performance across diverse workloads.
+Quill's SPSC queues provide efficient, lock-free inter-thread communication for logging. Bounded queues offer deterministic behavior and low overhead, while unbounded queues adapt to workload bursts with controlled growth and optional shrinking. TransitEvent and the codec system enable zero-copy message passing and flexible serialization. Proper configuration of queue types, capacities, and memory policies yields optimal performance across diverse workloads.
 
 [No sources needed since this section summarizes without analyzing specific files]
 
@@ -359,3 +371,13 @@ Quill’s SPSC queues provide efficient, lock-free inter-thread communication fo
 ### Queue Types and Policies
 - QueueType enum defines available queue modes.
 - Reference: [Common.h:145-180](file://include/quill/core/Common.h#L145-L180)
+
+### Enhanced Code Organization Benefits
+**Updated** The BoundedSPSCQueue implementation now features improved code organization that enhances maintainability:
+
+- **Better #ifdef Guard Placement**: Conditional compilation blocks are strategically placed to minimize code duplication and improve readability
+- **Logical Member Variable Grouping**: Variables are grouped by functional purpose (configuration, storage, atomic positions, cache management) making the code easier to understand and modify
+- **Improved Separation of Concerns**: Implementation details are better separated from public interfaces, making the codebase more modular
+- **Enhanced Readability**: The reorganized structure makes it easier for developers to locate specific functionality and understand the overall design
+
+These organizational improvements contribute to better long-term maintainability while preserving all existing functionality and performance characteristics.
