@@ -18,9 +18,9 @@
 
 ## Update Summary
 **Changes Made**
-- Updated BoundedSPSCQueue implementation analysis to reflect improved code organization and maintainability
-- Enhanced documentation of member variable grouping and #ifdef guard placement improvements
-- Added detailed explanation of the reorganized code structure for better readability
+- Updated BoundedSPSCQueue implementation analysis to reflect enhanced code organization and maintainability improvements
+- Enhanced documentation of improved member variable grouping, #ifdef guard placement, and separation of concerns
+- Added detailed explanation of the reorganized code structure for better readability and developer experience
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -97,7 +97,7 @@ IT1 --> FE
 - [BoundedDroppingQueueTest.cpp:15-22](file://test/integration_tests/BoundedDroppingQueueTest.cpp#L15-L22)
 
 ## Core Components
-- BoundedSPSCQueue: Fixed-capacity, lock-free ring buffer with aligned storage and cache-line aware operations. Uses atomic positions and explicit cache flush/prefetch on x86. **Enhanced** with improved code organization and member variable grouping for better readability and maintainability.
+- BoundedSPSCQueue: Fixed-capacity, lock-free ring buffer with aligned storage and cache-line aware operations. Uses atomic positions and explicit cache flush/prefetch on x86. **Enhanced** with improved code organization, better #ifdef guard placement, logical member variable grouping, and clearer separation of concerns for enhanced maintainability.
 - UnboundedSPSCQueue: Producer-driven linked list of bounded queues with exponential growth and controlled maximum capacity. Supports shrinking and seamless handoff between nodes.
 - TransitEvent: Zero-copy message container holding formatted logs, metadata, and optional runtime metadata. Uses move semantics and manual buffer copies for safety.
 - TransitEventBuffer: Circular buffer for backend-side event batching with dynamic expansion and optional shrink-to-initial.
@@ -146,11 +146,25 @@ BE->>BE : "format and emit to sinks"
 - Capacity and batching: Reader commits in batches to reduce atomic contention; batch size derived from a percentage of capacity.
 - Allocation: Platform-specific aligned allocation with optional huge pages support.
 
-**Enhanced Code Organization**: The implementation now features improved code readability through:
-- Better #ifdef guard placement for platform-specific optimizations
-- Logical grouping of member variables by purpose and usage
-- Clear separation between public interface, private implementation, and platform-specific sections
-- Organized helper functions and utility methods
+**Enhanced Code Organization**: The implementation now features significantly improved code organization that enhances maintainability and developer experience:
+
+- **Better #ifdef Guard Placement**: Conditional compilation blocks are strategically positioned to minimize code duplication and improve readability. Platform-specific optimizations are now grouped more logically.
+- **Logical Member Variable Grouping**: Variables are systematically organized by functional purpose:
+  - Configuration variables: `_capacity`, `_mask`, `_bytes_per_batch`, `_huge_pages_policy`
+  - Storage and alignment: `_storage`
+  - Writer position tracking: `_atomic_writer_pos`, `_writer_pos`, `_reader_pos_cache`
+  - Reader position tracking: `_atomic_reader_pos`, `_reader_pos`, `_writer_pos_cache`
+  - Platform-specific cache management: `_last_flushed_writer_pos`, `_last_flushed_reader_pos`
+- **Improved Separation of Concerns**: The implementation is now better structured with:
+  - Public interface methods (operations)
+  - Private implementation methods (helper functions)
+  - Platform-specific optimizations (separated into dedicated sections)
+  - Data members grouped by purpose and usage patterns
+- **Enhanced Readability**: The reorganized structure makes it easier for developers to:
+  - Locate specific functionality quickly
+  - Understand the overall design and responsibilities
+  - Maintain and extend the codebase
+  - Debug issues related to specific aspects of the queue
 
 Key operations:
 - prepare_write(n): Reserve contiguous space; return nullptr if insufficient space.
@@ -373,11 +387,25 @@ Quill's SPSC queues provide efficient, lock-free inter-thread communication for 
 - Reference: [Common.h:145-180](file://include/quill/core/Common.h#L145-L180)
 
 ### Enhanced Code Organization Benefits
-**Updated** The BoundedSPSCQueue implementation now features improved code organization that enhances maintainability:
+**Updated** The BoundedSPSCQueue implementation now features significantly improved code organization that enhances maintainability and developer experience:
 
-- **Better #ifdef Guard Placement**: Conditional compilation blocks are strategically placed to minimize code duplication and improve readability
-- **Logical Member Variable Grouping**: Variables are grouped by functional purpose (configuration, storage, atomic positions, cache management) making the code easier to understand and modify
-- **Improved Separation of Concerns**: Implementation details are better separated from public interfaces, making the codebase more modular
-- **Enhanced Readability**: The reorganized structure makes it easier for developers to locate specific functionality and understand the overall design
+- **Better #ifdef Guard Placement**: Conditional compilation blocks are strategically positioned to minimize code duplication and improve readability. Platform-specific optimizations are now grouped more logically, making it easier to understand which features apply to which platforms.
+- **Logical Member Variable Grouping**: Variables are systematically organized by functional purpose, improving code comprehension and maintenance:
+  - Configuration variables: `_capacity`, `_mask`, `_bytes_per_batch`, `_huge_pages_policy`
+  - Storage and alignment: `_storage`
+  - Writer position tracking: `_atomic_writer_pos`, `_writer_pos`, `_reader_pos_cache`
+  - Reader position tracking: `_atomic_reader_pos`, `_reader_pos`, `_writer_pos_cache`
+  - Platform-specific cache management: `_last_flushed_writer_pos`, `_last_flushed_reader_pos`
+- **Improved Separation of Concerns**: The implementation is now better structured with distinct sections:
+  - Public interface methods (operations)
+  - Private implementation methods (helper functions)
+  - Platform-specific optimizations (separated into dedicated sections)
+  - Data members grouped by purpose and usage patterns
+- **Enhanced Readability**: The reorganized structure makes it significantly easier for developers to:
+  - Locate specific functionality quickly through logical grouping
+  - Understand the overall design and responsibilities of different code sections
+  - Maintain and extend the codebase with minimal cognitive load
+  - Debug issues related to specific aspects of the queue without navigating through unrelated code
+- **Developer Experience Improvements**: These organizational changes contribute to better long-term maintainability while preserving all existing functionality and performance characteristics, making the codebase more welcoming to new contributors and easier to evolve over time.
 
-These organizational improvements contribute to better long-term maintainability while preserving all existing functionality and performance characteristics.
+These organizational improvements represent a substantial enhancement to the codebase's structure without changing any functional behavior, demonstrating good software engineering practices in code organization and maintainability.
